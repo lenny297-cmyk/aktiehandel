@@ -1,0 +1,108 @@
+name: Handelsrunda
+
+# GitHub Actions cron går i UTC och känner inte till sommartid. Därför ligger
+# varje slot som två poster, en för vintertid (UTC+1) och en för sommartid
+# (UTC+2). Skriptet avgör själv i Europe/Stockholm vilken som är den riktiga
+# och avslutar tyst när fel halva av året triggar.
+#
+# Cron i GitHub Actions kan dessutom bli flera tiotals minuter försenad.
+# Toleransfönstret i config.yaml tar hand om det, och runs.json ser till att
+# en slot aldrig körs två gånger samma dag.
+
+on:
+  schedule:
+    # Vintertid (CET, UTC+1) -> 09:15, 12:30 och 17:00 svensk tid
+    - cron: "15 8 * * 1-5"
+    - cron: "30 11 * * 1-5"
+    - cron: "0 16 * * 1-5"
+    # Sommartid (CEST, UTC+2) -> samma lokala klockslag
+    - cron: "15 7 * * 1-5"
+    - cron: "30 10 * * 1-5"
+    - cron: "0 15 * * 1-5"
+
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: "Slot att köra. auto = låt klockan avgöra."
+        type: choice
+        required: true
+        default: auto
+        options: [auto, morning, midday, close]
+      dry_run:
+        description: "Kör hela flödet utan att skriva eller committa"
+        type: boolean
+        required: false
+        default: false
+      force:
+        description: "Kör även om sloten redan är körd i dag"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+# Två rundor får aldrig skriva till state samtidigt.
+concurrency:
+  group: handelsrunda
+  cancel-in-progress: false
+
+jobs:
+  runda:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Hämta repot
+        uses: actions/checkout@v4
+
+      - name: Sätt upp Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Installera beroenden
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Bygg argument
+        id: args
+        run: |
+          args=""
+          if [ "${{ inputs.slot }}" != "" ] && [ "${{ inputs.slot }}" != "auto" ]; then
+            args="$args --slot ${{ inputs.slot }}"
+          fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            args="$args --dry-run"
+          fi
+          if [ "${{ inputs.force }}" = "true" ]; then
+            args="$args --force"
+          fi
+          echo "value=$args" >> "$GITHUB_OUTPUT"
+          echo "Kör med: ${args:-(inga extra argument)}"
+
+      - name: Kör handelsrundan
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PYTHONPATH: src
+          PYTHONUTF8: "1"
+        run: python -m aiaktier.run ${{ steps.args.outputs.value }}
+
+      - name: Committa state
+        if: inputs.dry_run != true
+        run: |
+          git config user.name "aiaktier-bot"
+          git config user.email "noreply@users.noreply.github.com"
+
+          if git diff --quiet -- data docs/data; then
+            echo "Ingen förändring att committa."
+            exit 0
+          fi
+
+          git add data docs/data
+          git commit -m "Handelsrunda $(date -u '+%Y-%m-%d %H:%M UTC')"
+
+          # Hämta in eventuella ändringar som landat under körningen.
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

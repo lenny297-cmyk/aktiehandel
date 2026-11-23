@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-aktieexperimentet</title>
+<meta name="description" content="Claude förvaltar 100 000 kr på papper i svenska aktier och försöker slå OMXS30. Simulerat, inga riktiga order.">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📈</text></svg>">
+</head>
+<body>
+
+<header class="topp">
+  <h1>AI-aktieexperimentet</h1>
+  <p class="underrubrik">
+    Claude förvaltar 100&nbsp;000 kr på papper i OMXS30-bolag och försöker slå index.
+  </p>
+  <p class="varning" id="disclaimer">
+    Simulerat experiment. Inga riktiga order läggs. Detta är inte finansiell rådgivning.
+  </p>
+</header>
+
+<main id="innehall" hidden>
+
+  <section class="kort resultat" aria-labelledby="rubrik-resultat">
+    <h2 id="rubrik-resultat">Sedan start</h2>
+    <div class="jamforelse">
+      <div class="sida">
+        <span class="etikett">Portfölj</span>
+        <strong class="belopp" id="portfolj-varde">–</strong>
+        <span class="forandring" id="portfolj-avkastning">–</span>
+      </div>
+      <div class="sida">
+        <span class="etikett">OMXS30</span>
+        <strong class="belopp" id="index-varde">–</strong>
+        <span class="forandring" id="index-avkastning">–</span>
+      </div>
+    </div>
+    <p class="overskott" id="overskott">–</p>
+  </section>
+
+  <section class="kort" aria-labelledby="rubrik-idag">
+    <h2 id="rubrik-idag">I dag</h2>
+    <div class="nyckeltal">
+      <div><span class="etikett">Portfölj</span><strong id="idag-portfolj">–</strong></div>
+      <div><span class="etikett">OMXS30</span><strong id="idag-index">–</strong></div>
+      <div><span class="etikett">Skillnad</span><strong id="idag-skillnad">–</strong></div>
+      <div><span class="etikett">Kassa</span><strong id="kassa">–</strong></div>
+    </div>
+  </section>
+
+  <section class="kort" aria-labelledby="rubrik-graf">
+    <h2 id="rubrik-graf">Portfölj mot index</h2>
+    <div class="graf-omslag">
+      <svg id="graf" viewBox="0 0 800 320" preserveAspectRatio="none" role="img"
+           aria-label="Kurva över portföljens värde jämfört med OMXS30"></svg>
+    </div>
+    <div class="legend">
+      <span class="prick portfolj"></span> Portfölj
+      <span class="prick index"></span> OMXS30
+    </div>
+    <p class="not" id="graf-not"></p>
+  </section>
+
+  <section class="kort" aria-labelledby="rubrik-positioner">
+    <h2 id="rubrik-positioner">Öppna positioner</h2>
+    <div id="positioner"></div>
+  </section>
+
+  <section class="kort" aria-labelledby="rubrik-affarer">
+    <h2 id="rubrik-affarer">Senast stängda affärer</h2>
+    <div id="affarer"></div>
+  </section>
+
+  <section class="kort" aria-labelledby="rubrik-lage">
+    <h2 id="rubrik-lage">Claudes lägesbild</h2>
+    <p id="lagesbild" class="lagesbild">–</p>
+    <div id="avvisade"></div>
+  </section>
+
+</main>
+
+<p id="status" class="status">Hämtar data …</p>
+
+<footer class="botten">
+  <p id="uppdaterad"></p>
+  <p>
+    Kurser från Yahoo Finance. Beslut av Claude. All bokföring, validering och
+    jämförelse görs i kod, inte av modellen.
+  </p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

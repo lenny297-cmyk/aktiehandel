@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -203,3 +203,86 @@ def test_slottar_sorteras_i_tidsordning(cal):
 def test_tom_slotlista_avvisas():
     with pytest.raises(ValueError):
         TradingCalendar.from_config({"schedule": {"slots": {}}})
+
+
+# ------------------------------------------------ fönster som inte krockar
+
+
+def config_with_tolerance(minutes):
+    cfg = {
+        "schedule": dict(CONFIG["schedule"]),
+        "market": CONFIG["market"],
+    }
+    cfg["schedule"]["tolerance_minutes"] = minutes
+    return cfg
+
+
+def test_overlappande_fonster_avvisas():
+    # Morgon 09:15 + 4 timmar = 13:15, förbi middagsslotten 12:30.
+    with pytest.raises(ValueError) as exc:
+        TradingCalendar.from_config(config_with_tolerance(240))
+    assert "morning" in str(exc.value)
+    assert "midday" in str(exc.value)
+
+
+def test_fonster_som_slutar_precis_pa_nasta_slot_avvisas():
+    # 09:15 + 195 minuter = 12:30. Då skulle en körning 12:30 matcha morgonen.
+    with pytest.raises(ValueError):
+        TradingCalendar.from_config(config_with_tolerance(195))
+
+
+def test_fonster_som_slutar_minuten_fore_nasta_slot_godkanns():
+    cal = TradingCalendar.from_config(config_with_tolerance(194))
+    assert cal.tolerance_minutes == 194
+
+
+def test_negativ_tolerans_avvisas():
+    with pytest.raises(ValueError):
+        TradingCalendar.from_config(config_with_tolerance(-5))
+
+
+def test_tva_timmars_fonster_tar_emot_sen_korning():
+    cal = TradingCalendar.from_config(config_with_tolerance(120))
+    # 10:55 lokalt, 100 minuter sent: fortfarande morgon.
+    assert cal.match_slot(utc(2026, 11, 24, 9, 55)).slot_name == "morning"
+    # 11:16 lokalt: utanför morgonfönstret, före middagsslotten.
+    sent = cal.match_slot(utc(2026, 11, 24, 10, 16))
+    assert not sent.ok and sent.reason == SKIP_NO_SLOT
+    # 18:55 lokalt: fortfarande stängningsslotten.
+    assert cal.match_slot(utc(2026, 11, 24, 17, 55)).slot_name == "close"
+
+
+def test_sommartidsposten_hamnar_aldrig_i_fel_slot_pa_vintern():
+    # Sommartidsposternas UTC-tider, avlästa i vintertid, plus fördröjningar
+    # upp till två timmar. Varje träff måste vara den slot posten hör till.
+    cal = TradingCalendar.from_config(config_with_tolerance(120))
+    expected = {(7, 15): "morning", (10, 30): "midday", (15, 0): "close"}
+    for (hour, minute), slot in expected.items():
+        for delay in range(0, 121, 5):
+            moment = utc(2026, 11, 24, hour, minute) + timedelta(minutes=delay)
+            decision = cal.match_slot(moment)
+            if decision.ok:
+                assert decision.slot_name == slot, (hour, minute, delay)
+
+
+def test_repots_egen_konfiguration_laddar():
+    # Fångar en ändring i config.yaml som gör att fönstren krockar.
+    from pathlib import Path
+    from aiaktier.config import Config
+
+    cal = Config.load(Path(__file__).resolve().parents[1]).calendar
+    assert cal.tolerance_minutes == 120
+    assert [s.name for s in cal.slots] == ["morning", "midday", "close"]
+
+
+def test_vintertidsposten_hamnar_aldrig_i_fel_slot_pa_sommaren():
+    # På sommaren landar vintertidsposterna en timme sent och äter mest av
+    # toleransen. Ingen fördröjning får göra dem till en annan slot.
+    cal = TradingCalendar.from_config(config_with_tolerance(120))
+    expected = {(8, 15): "morning", (11, 30): "midday", (16, 0): "close"}
+    for (hour, minute), slot in expected.items():
+        for delay in range(0, 121, 5):
+            moment = utc(2026, 6, 10, hour, minute) + timedelta(minutes=delay)
+            decision = cal.match_slot(moment)
+            if decision.ok:
+                assert decision.slot_name == slot, (hour, minute, delay)

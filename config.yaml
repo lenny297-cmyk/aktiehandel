@@ -23,9 +23,12 @@ schedule:
     morning: "09:15"
     midday: "12:30"
     close: "17:00"
-  # GitHub Actions kan försena schemalagda jobb kraftigt. En körning accepteras
-  # om den startar inom detta antal minuter efter slottens klockslag.
-  tolerance_minutes: 75
+  # GitHub Actions kan försena schemalagda jobb kraftigt; den 23 november
+  # startade båda körningarna 55-57 minuter sent. En körning accepteras om
+  # den startar inom detta antal minuter efter slottens klockslag.
+  # Med 120 minuter blir fönstren 09:15-11:15, 12:30-14:30 och 17:00-19:00.
+  # Koden vägrar starta om två fönster överlappar.
+  tolerance_minutes: 120
 
 market:
   open: "09:00"

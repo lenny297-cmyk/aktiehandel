@@ -85,10 +85,15 @@ class TradingCalendar:
         if not slots:
             raise ValueError("minst en slot maste vara konfigurerad")
 
+        tolerance = int(schedule.get("tolerance_minutes", 60))
+        if tolerance < 0:
+            raise ValueError("tolerance_minutes far inte vara negativ")
+        _check_windows_do_not_overlap(slots, tolerance)
+
         return cls(
             timezone=schedule.get("timezone", "Europe/Stockholm"),
             slots=slots,
-            tolerance_minutes=int(schedule.get("tolerance_minutes", 60)),
+            tolerance_minutes=tolerance,
             market_open=parse_hhmm(market.get("open", "09:00")),
             market_close=parse_hhmm(market.get("close", "17:30")),
             holidays=frozenset(
@@ -174,6 +179,26 @@ class TradingCalendar:
                 return SlotDecision(True, slot, "ok", local)
 
         return SlotDecision(False, None, SKIP_NO_SLOT, local)
+
+
+def _check_windows_do_not_overlap(slots, tolerance_minutes: int) -> None:
+    """Vägra en konfiguration där ett slotfönster når in i nästa.
+
+    match_slot väljer första fönstret som passar. Överlappar två fönster skulle
+    en försenad morgonkörning tyst räknas som morgon fast den startade efter
+    middagsslottens klockslag, och middagsslotten skulle sedan köras igen.
+    Fönstret måste därför sluta strikt före nästa slots klockslag.
+    """
+    anchor = date(2000, 1, 3)
+    window = timedelta(minutes=tolerance_minutes)
+    for current, following in zip(slots, slots[1:]):
+        end = datetime.combine(anchor, current.at) + window
+        start_next = datetime.combine(anchor, following.at)
+        if end >= start_next:
+            raise ValueError(
+                "fonstret for {} slutar {:%H:%M} men {} borjar {:%H:%M}. "
+                "Minska tolerance_minutes.".format(current, end, following, start_next)
+            )
 
 
 def already_ran(runs: dict, day: date, slot_name: str) -> bool:

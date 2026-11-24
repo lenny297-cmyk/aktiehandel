@@ -139,7 +139,7 @@ src/aiaktier/
 
 data/                 portfölj, affärer, dagliga värden, beslutslogg, meta, runs
 docs/                 den publicerade sidan; docs/data är en kopia av data/
-tests/                188 tester, inget rör nätet eller API:et
+tests/                196 tester, inget rör nätet eller API:et
 scripts/              check_universe.py
 ```
 

@@ -95,12 +95,19 @@ jobs:
           git config user.name "aiaktier-bot"
           git config user.email "noreply@users.noreply.github.com"
 
-          if git diff --quiet -- data docs/data; then
+          # Stagea först och jämför sedan. git diff utan --cached ser inte nya,
+          # ospårade filer, och första skarpa rundan består bara av nya filer:
+          # meta.json, portfolio.json, hela docs/data/. Den gamla kontrollen
+          # svarade därför "ingen förändring" och kastade första rundan.
+          # docs används i stället för docs/data, eftersom docs alltid finns
+          # men docs/data saknas tills första rundan skrivit den.
+          git add -A -- data docs
+
+          if git diff --cached --quiet; then
             echo "Ingen förändring att committa."
             exit 0
           fi
 
-          git add data docs/data
           git commit -m "Handelsrunda $(date -u '+%Y-%m-%d %H:%M UTC')"
 
           # Hämta in eventuella ändringar som landat under körningen.

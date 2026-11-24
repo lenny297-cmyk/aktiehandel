@@ -10,15 +10,20 @@ name: Handelsrunda
 # en slot aldrig körs två gånger samma dag.
 
 on:
-  schedule:
-    # Vintertid (CET, UTC+1) -> 09:15, 12:30 och 17:00 svensk tid
-    - cron: "15 8 * * 1-5"
-    - cron: "30 11 * * 1-5"
-    - cron: "0 16 * * 1-5"
-    # Sommartid (CEST, UTC+2) -> samma lokala klockslag
-    - cron: "15 7 * * 1-5"
-    - cron: "30 10 * * 1-5"
-    - cron: "0 15 * * 1-5"
+  # PAUSAD sedan 2026-11-24: Anthropic-kontot har inga krediter än.
+  # Inga rundor startar av sig själva. För att återuppta: fyll på krediter,
+  # ta bort kommentartecknen på de sju raderna nedan och pusha till main.
+  # Den första schemalagda rundan därefter fryser startdag och startkurs.
+  #
+  # schedule:
+  #   # Vintertid (CET, UTC+1) -> 09:15, 12:30 och 17:00 svensk tid
+  #   - cron: "15 8 * * 1-5"
+  #   - cron: "30 11 * * 1-5"
+  #   - cron: "0 16 * * 1-5"
+  #   # Sommartid (CEST, UTC+2) -> samma lokala klockslag
+  #   - cron: "15 7 * * 1-5"
+  #   - cron: "30 10 * * 1-5"
+  #   - cron: "0 15 * * 1-5"
 
   workflow_dispatch:
     inputs:

@@ -1,5 +1,9 @@
 # AI-aktieexperimentet
 
+> **Pausat.** Schemat i `.github/workflows/trade.yml` är avstängt och inga
+> rundor körs. Experimentet har inte startat, så inget startdatum är fryst.
+> Hur det återupptas står överst i workflow-filen.
+
 Claude förvaltar **100 000 kr på papper** i OMXS30-bolag och försöker slå index.
 Tre körningar per vardag, all bokföring i JSON i det här repot, en statisk sida
 i `/docs`.

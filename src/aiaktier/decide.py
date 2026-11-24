@@ -325,7 +325,7 @@ def ask(
         raise DecisionUnavailable("hastighetsbegransad: {}".format(exc)) from exc
     except anthropic.APIStatusError as exc:
         raise DecisionUnavailable(
-            "API svarade {}: {}".format(exc.status_code, exc)
+            "API svarade {}: {}".format(exc.status_code, _reason(exc))
         ) from exc
     except anthropic.APIConnectionError as exc:
         raise DecisionUnavailable("nade inte API:et: {}".format(exc)) from exc
@@ -334,22 +334,54 @@ def ask(
 
 
 def _send(client, request: dict, use_fallback: bool):
-    """Skicka anropet. Faller tillbaka till ett vanligt anrop om beta-flaggan
-    för serverside-fallback inte accepteras, så att en avvisad flagga inte
-    tystar hela experimentet."""
+    """Skicka anropet, med serverside-fallback om den är påslagen.
+
+    Ett 400-svar på anropet med fallback kan bero på beta-flaggan, men lika
+    gärna på något helt annat — tomt kreditsaldo, fel modellnamn, ogiltigt
+    schema. Därför görs ett vanligt anrop utan flaggan, och orsaken fastställs
+    först av hur det går:
+
+    - går det vanliga anropet igenom var det flaggan, och det loggas så
+    - avvisas det också ligger felet någon annanstans, och det felet går vidare
+
+    Loggen påstår alltså aldrig att flaggan var orsaken innan det är visat.
+    """
     import anthropic
 
-    if use_fallback:
-        try:
-            return client.beta.messages.create(
-                betas=[FALLBACK_BETA], fallbacks="default", **request
-            )
-        except anthropic.BadRequestError as exc:
-            log.warning(
-                "serverside-fallback accepterades inte (%s), gor ett vanligt anrop",
-                exc,
-            )
-    return client.messages.create(**request)
+    if not use_fallback:
+        return client.messages.create(**request)
+
+    try:
+        return client.beta.messages.create(
+            betas=[FALLBACK_BETA], fallbacks="default", **request
+        )
+    except anthropic.BadRequestError as exc:
+        log.warning(
+            "anropet med serverside-fallback avvisades (%s), provar utan",
+            _reason(exc),
+        )
+
+    try:
+        response = client.messages.create(**request)
+    except anthropic.BadRequestError as exc:
+        log.warning(
+            "anropet utan serverside-fallback avvisades ocksa, sa felet ligger "
+            "inte i fallback-flaggan: %s",
+            _reason(exc),
+        )
+        raise
+
+    log.warning(
+        "anropet gick igenom utan serverside-fallback: flaggan var orsaken till "
+        "avslaget och ar avstangd den har rundan. Satt server_side_fallback: "
+        "false i config.yaml om det upprepas."
+    )
+    return response
+
+
+def _reason(exc) -> str:
+    """Felets egentliga meddelande, utan hela svarsdumpen runt omkring."""
+    return getattr(exc, "api_message", None) or str(exc)
 
 
 def _parse(response, model: str) -> Decision:

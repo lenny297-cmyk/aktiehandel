@@ -290,3 +290,70 @@ def test_natverksfel_blir_dataunavailable():
     with pytest.raises(DecisionUnavailable) as exc:
         ask(make_context(), {}, client=client)
     assert "API" in str(exc.value)
+
+
+# ------------------------------------------- serverside-fallback och 400-svar
+
+
+def bad_request(message):
+    """Ett riktigt anthropic.BadRequestError, byggt som SDK:n själv bygger det."""
+    import anthropic
+    import httpx2
+
+    request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    response = httpx2.Response(400, request=request)
+    body = {"type": "error", "error": {"type": "invalid_request_error", "message": message}}
+    return anthropic.BadRequestError(message, response=response, body=body)
+
+
+CREDIT = "Your credit balance is too low to access the Anthropic API."
+
+
+def test_kreditfel_skylls_inte_pa_fallback_flaggan(caplog):
+    # Exakt det som hände på GitHub den 24 november.
+    client = FakeClient(bad_request(CREDIT), beta_response=bad_request(CREDIT))
+
+    with caplog.at_level("WARNING"):
+        with pytest.raises(DecisionUnavailable) as exc:
+            ask(make_context(), {}, client=client)
+
+    loggen = caplog.text
+    assert "accepterades inte" not in loggen
+    assert "felet ligger inte i fallback-flaggan" in loggen
+    assert "flaggan var orsaken" not in loggen
+    # Det verkliga felet når fram, och utan hela svarsdumpen runt omkring.
+    assert "credit balance is too low" in str(exc.value)
+    assert "invalid_request_error" not in str(exc.value)
+
+
+def test_avvisad_flagga_konstateras_forst_nar_vanligt_anrop_gar_igenom(caplog):
+    client = FakeClient(
+        response_with(VALID),
+        beta_response=bad_request("fallbacks: Extra inputs are not permitted"),
+    )
+
+    with caplog.at_level("WARNING"):
+        decision = ask(make_context(), {}, client=client)
+
+    assert decision.proposals[0]["ticker"] == ERIC
+    assert "flaggan var orsaken" in caplog.text
+    assert "server_side_fallback: false" in caplog.text
+
+
+def test_lyckat_anrop_med_fallback_gor_bara_ett_anrop(caplog):
+    client = FakeClient(bad_request("ska aldrig anropas"), beta_response=response_with(VALID))
+
+    with caplog.at_level("WARNING"):
+        ask(make_context(), {}, client=client)
+
+    assert client.record == {}            # det vanliga anropet gjordes aldrig
+    assert caplog.text == ""
+
+
+def test_utan_fallback_gors_inget_extra_anrop_vid_400():
+    client = FakeClient(bad_request(CREDIT), beta_response=response_with(VALID))
+
+    with pytest.raises(DecisionUnavailable):
+        ask(make_context(), {"server_side_fallback": False}, client=client)
+
+    assert client.beta_record == {}

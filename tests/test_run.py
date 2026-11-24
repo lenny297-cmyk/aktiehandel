@@ -366,3 +366,30 @@ def test_sammanfattningen_har_serie_for_grafen(repo, wire):
     summary = read_json(repo / "data" / "summary.json")
     assert len(summary["series"]) == 1          # samma dag, en punkt
     assert summary["series"][0]["index"] == pytest.approx(102_000.0)
+
+
+# ------------------------------------------------------- omförsök via config
+
+
+def test_omforsoksinstallningarna_fran_config_nar_fram(repo, monkeypatch):
+    seen = {}
+
+    def fetch(*args, **kwargs):
+        seen.update(kwargs)
+        return snapshot()
+
+    monkeypatch.setattr(run_module, "fetch_snapshot", fetch)
+    monkeypatch.setattr(run_module, "ask", lambda *a, **k: fake_decision([]))
+
+    invoke(repo)
+
+    assert seen["attempts"] == 4
+    assert seen["backoff_seconds"] == 5.0
+    assert seen["backoff_factor"] == 3.0
+
+
+def test_uttomda_omforsok_hoppar_over_rundan_som_vanligt(repo, wire):
+    wire(data_error=DataUnavailable("gav upp efter 4 forsok"))
+
+    assert invoke(repo) == 0
+    assert not (repo / "data" / "meta.json").exists()

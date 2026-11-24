@@ -127,6 +127,18 @@ class Config:
         return int(self.raw.get("data", {}).get("max_staleness_days", 3))
 
     @property
+    def download_attempts(self) -> int:
+        return max(1, int(self.raw.get("data", {}).get("download_attempts", 4)))
+
+    @property
+    def download_backoff_seconds(self) -> float:
+        return float(self.raw.get("data", {}).get("download_backoff_seconds", 5))
+
+    @property
+    def download_backoff_factor(self) -> float:
+        return float(self.raw.get("data", {}).get("download_backoff_factor", 3))
+
+    @property
     def model(self) -> dict:
         return dict(self.raw.get("model", {}))
 

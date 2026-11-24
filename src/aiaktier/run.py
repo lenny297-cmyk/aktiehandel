@@ -71,6 +71,9 @@ def main(argv=None) -> int:
             config.benchmark_ticker,
             now=now,
             history_days=config.history_days,
+            attempts=config.download_attempts,
+            backoff_seconds=config.download_backoff_seconds,
+            backoff_factor=config.download_backoff_factor,
         )
     except DataUnavailable as exc:
         log.error("hoppar over rundan: %s", exc)

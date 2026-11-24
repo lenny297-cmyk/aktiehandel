@@ -39,6 +39,10 @@ experiment, inte finansiell rådgivning.
 - **Marknadsdata:** `yfinance`. Svenska aktier har suffix `.ST`
   (t.ex. `ERIC-B.ST`), index OMXS30 är `^OMX`. All hämtning ligger bakom ett
   eget lager som kastar ett tydligt fel vid problem — aldrig tysta fallbacks.
+  Hämtningen görs om med växande väntetid innan rundan hoppas över, eftersom
+  Yahoo ofta strypsätter GitHub Actions-runners. Ett omförsök frågar samma
+  källa igen och är ingen fallback: ett svar som saknar index eller för många
+  bolag räknas som misslyckat och görs om, det lappas aldrig ihop.
 - **Beslut:** Claude API, modell `claude-sonnet-5-5`. Nyckeln läses från
   miljövariabeln `ANTHROPIC_API_KEY` (GitHub Secret). Nyckeln får aldrig
   committas, loggas eller skrivas till någon JSON-fil.

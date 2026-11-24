@@ -8,6 +8,7 @@ gissar aldrig ett pris: saknas data kastas DataUnavailable och rundan hoppas
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Iterable, Optional, Sequence
@@ -97,29 +98,78 @@ def fetch_snapshot(
     now: datetime,
     history_days: int = 60,
     min_coverage: float = 0.5,
+    attempts: int = 3,
+    backoff_seconds: float = 5.0,
+    backoff_factor: float = 3.0,
+    sleep_fn=None,
     downloader=None,
 ) -> MarketSnapshot:
-    """Hämta priser och historik.
+    """Hämta priser och historik, med omförsök mot en ostadig datakälla.
 
-    Kastar DataUnavailable om index saknas eller om för få aktier fick data.
-    `downloader` finns för att kunna köra tester utan nätverk.
+    Yahoo strypsätter moln-IP:n, och GitHub Actions-runners träffas ofta av det.
+    En strypning ger lika gärna en tom eller halvtom tabell som ett undantag, så
+    hela steget — nedladdning *och* validering — görs om. Ett svar som bara
+    innehåller hälften av bolagen är lika oanvändbart som inget svar alls.
+
+    Efter sista försöket kastas felet från det försöket och rundan hoppas över.
+    Ingenting gissas, varken här eller längre fram.
+
+    `downloader` och `sleep_fn` finns för att kunna köra tester utan nätverk
+    och utan att vänta.
     """
+    if attempts < 1:
+        raise ValueError("attempts maste vara minst 1")
+
     symbols = list(dict.fromkeys(list(tickers) + [benchmark]))
     # Kalenderdagar måste täcka önskat antal handelsdagar med marginal.
     period_days = max(history_days * 2 + 15, 40)
 
     if downloader is None:
         downloader = _yfinance_download
+    if sleep_fn is None:
+        sleep_fn = time.sleep
 
-    try:
-        frame = downloader(symbols, period_days)
-    except DataUnavailable:
-        raise
-    except Exception as exc:  # nätverksfel, API-ändringar, allt annat
-        raise DataUnavailable(
-            "kunde inte hamta kursdata: {}: {}".format(type(exc).__name__, exc)
-        ) from exc
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return _build_snapshot(
+                downloader(symbols, period_days),
+                symbols=symbols,
+                benchmark=benchmark,
+                now=now,
+                history_days=history_days,
+                min_coverage=min_coverage,
+            )
+        except DataUnavailable as exc:
+            last_error = exc
+        except Exception as exc:  # nätverksfel, API-ändringar, allt annat
+            last_error = DataUnavailable(
+                "kunde inte hamta kursdata: {}: {}".format(type(exc).__name__, exc)
+            )
+            last_error.__cause__ = exc
 
+        if attempt < attempts:
+            delay = backoff_seconds * (backoff_factor ** (attempt - 1))
+            log.warning(
+                "forsok %d av %d misslyckades (%s), vantar %.0f s",
+                attempt, attempts, last_error, delay,
+            )
+            sleep_fn(delay)
+
+    log.error("gav upp efter %d forsok: %s", attempts, last_error)
+    raise last_error
+
+
+def _build_snapshot(
+    frame,
+    *,
+    symbols: Sequence,
+    benchmark: str,
+    now: datetime,
+    history_days: int,
+    min_coverage: float,
+) -> MarketSnapshot:
+    """Packa upp och validera ett svar. Kastar DataUnavailable om det inte håller."""
     if frame is None or len(frame) == 0:
         raise DataUnavailable("kursdata kom tillbaka tom")
 

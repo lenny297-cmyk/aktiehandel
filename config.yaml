@@ -83,3 +83,9 @@ data:
   history_days: 60
   # Hur gammal senaste kursen får vara (handelsdagar) innan rundan hoppas över.
   max_staleness_days: 3
+  # Omförsök mot Yahoo, som ofta strypsätter GitHub Actions-runners.
+  # Väntetiden växer: 5 s, 15 s, 45 s mellan försöken, drygt en minut totalt.
+  # Går alla försök fel hoppas rundan över som vanligt.
+  download_attempts: 4
+  download_backoff_seconds: 5
+  download_backoff_factor: 3

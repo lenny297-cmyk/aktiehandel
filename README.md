@@ -20,7 +20,8 @@ ignoreras.
 Varje runda, i ordning:
 
 1. avgör om körningen hör till en giltig slot (svensk lokaltid, inte helg eller helgdag)
-2. hämtar kurser och index via yfinance — annars hoppas rundan över
+2. hämtar kurser och index via yfinance, med upp till fyra försök och växande
+   väntetid emellan — går alla fel hoppas rundan över
 3. rättar gårdagens värde mot officiella stängningskurser
 4. kontrollerar stopp och mål på öppna positioner
 5. värderar portföljen
@@ -138,7 +139,7 @@ src/aiaktier/
 
 data/                 portfölj, affärer, dagliga värden, beslutslogg, meta, runs
 docs/                 den publicerade sidan; docs/data är en kopia av data/
-tests/                176 tester, inget rör nätet eller API:et
+tests/                188 tester, inget rör nätet eller API:et
 scripts/              check_universe.py
 ```
 
